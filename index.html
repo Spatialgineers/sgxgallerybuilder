@@ -3,14 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SGX - Infinite Borikua ARchiVR</title>
+    <title>SGX - Pure VR Architecture</title>
     <style>
         :root {
             --sgx-yellow: #FDCC0D;
             --sgx-blue: #32527B;
-            --sgx-copper: #B87333;
             --sgx-bg: #050505;
-            --glass: rgba(20, 20, 20, 0.75);
+            --glass: rgba(20, 20, 20, 0.85);
         }
 
         body { 
@@ -19,27 +18,18 @@
             background: var(--sgx-bg);
             font-family: 'Courier New', Courier, monospace;
             color: var(--sgx-yellow);
-            touch-action: none;
         }
 
-        canvas { 
-            display: block; 
-            position: absolute;
-            top: 0; left: 0; z-index: 1;
-        }
+        #scene-container { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; }
 
-        #webcam_feed { display: none; }
-        
+        /* UI Nativo SGX */
         #ui-layer {
             position: absolute; top: 0; left: 0;
             width: 100%; height: 100%;
-            display: flex; flex-direction: column;
-            justify-content: center; align-items: center;
+            display: flex; justify-content: center; align-items: center;
             background: rgba(5, 5, 5, 0.9);
             backdrop-filter: blur(10px);
-            -webkit-backdrop-filter: blur(10px);
             z-index: 50;
-            transition: opacity 0.6s ease, visibility 0.6s;
         }
 
         .sgx-panel {
@@ -47,642 +37,257 @@
             border: 1px solid var(--sgx-blue);
             border-top: 4px solid var(--sgx-yellow);
             border-radius: 8px;
-            padding: 40px;
+            padding: 50px;
             text-align: center;
             width: 450px;
             max-width: 90%;
             box-shadow: 0 20px 50px rgba(0,0,0,0.9), 0 0 20px rgba(50, 82, 123, 0.4);
         }
 
-        .sgx-panel h1 {
-            margin: 0 0 10px 0;
-            font-size: 2rem;
-            letter-spacing: 4px;
-            font-weight: 900;
-            color: #fff;
-        }
+        .sgx-panel h1 { margin: 0 0 10px 0; font-size: 2.2rem; letter-spacing: 4px; font-weight: 900; color: #fff; }
+        .sgx-panel p { color: #888; margin-bottom: 30px; font-size: 0.85rem; letter-spacing: 1px; }
 
         button.sgx-btn {
             background: var(--sgx-yellow); color: #000;
-            border: none; padding: 18px; font-size: 1rem;
+            border: none; padding: 20px; font-size: 1.2rem;
             font-weight: 900; font-family: inherit; cursor: pointer;
             border-radius: 4px; text-transform: uppercase;
-            width: 100%; margin-bottom: 12px; transition: all 0.2s;
+            width: 100%; transition: all 0.2s; letter-spacing: 2px;
         }
-        button.sgx-btn:hover { background: #fff; transform: translateY(-2px); }
+        button.sgx-btn:hover { background: #fff; transform: translateY(-2px); box-shadow: 0 5px 15px rgba(253, 204, 13, 0.4); }
 
-        button.secondary-btn {
-            background: transparent; color: #aaa;
-            border: 1px solid #444; padding: 12px;
-            width: 100%; cursor: pointer; border-radius: 4px;
-            text-transform: uppercase; font-size: 0.8rem; transition: 0.2s;
-        }
-        button.secondary-btn:hover { border-color: var(--sgx-blue); color: #fff; }
-
-        #nav-controls {
-            position: absolute;
-            bottom: 35px;
-            left: 50%;
-            transform: translateX(-50%);
-            display: none;
-            gap: 15px;
-            z-index: 40;
-        }
-
-        .nav-btn {
-            background: rgba(10, 10, 10, 0.85);
-            border: 1px solid var(--sgx-blue);
-            color: #ccc;
-            padding: 12px 20px;
-            border-radius: 4px;
-            font-family: inherit;
-            font-weight: 900;
-            cursor: pointer;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            transition: all 0.3s ease;
-            backdrop-filter: blur(10px);
-            font-size: 0.85rem;
-        }
-
-        .nav-btn:hover {
-            border-color: var(--sgx-yellow);
-            color: #fff;
-        }
-
-        .nav-btn.active {
-            background: var(--sgx-yellow);
-            color: #000;
-            border-color: var(--sgx-yellow);
-        }
-
-        #hud {
-            position: absolute; bottom: 25px; left: 25px;
-            background: rgba(10, 10, 10, 0.8);
-            border-left: 4px solid var(--sgx-yellow);
-            padding: 15px; font-size: 0.75rem;
-            z-index: 10; display: none; pointer-events: none; color: #ccc;
-            text-transform: uppercase; letter-spacing: 1px;
-        }
-
-        .lil-gui { 
-            --background-color: rgba(20, 20, 20, 0.95);
-            --text-color: #eee;
-            --title-background-color: #111;
-            --widget-color: #333;
-            --hover-color: #444;
-            --focus-color: var(--sgx-yellow);
-            z-index: 100; 
-        }
-
-        .top-btn {
-            position: absolute;
-            top: 25px;
-            right: 25px;
-            z-index: 60;
-        }
-
-        .hidden-upload { display: none; }
-        
-        /* Ajuste WebXR Button para asegurar visibilidad */
-        #VRButton { z-index: 1000 !important; }
+        /* Escondemos el botón default de WebXR */
+        #VRButton { display: none !important; }
     </style>
-
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js"></script>
 
     <script type="importmap">
     {
         "imports": {
             "three": "https://cdn.jsdelivr.net/npm/three@0.147.0/build/three.module.js",
-            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.147.0/examples/jsm/",
-            "lil-gui": "https://cdn.jsdelivr.net/npm/lil-gui@0.19/+esm"
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.147.0/examples/jsm/"
         }
     }
     </script>
 </head>
 <body>
 
-    <input type="file" id="local-image-upload" class="hidden-upload" accept="image/png, image/jpeg, image/webp">
-    
-    <video id="webcam_feed" autoplay playsinline muted></video>
     <div id="scene-container"></div>
 
     <div id="ui-layer">
         <div class="sgx-panel">
             <h1>INFINITE BORIKUA</h1>
-            <p style="color: #888; margin-bottom: 30px; font-size: 0.85rem;">
-                GALERÍA VIRTUAL 360<br>
-                <span style="color: var(--sgx-blue);">SGX.Showcase Architecture</span>
-            </p>
-            <button id="btn-start" class="sgx-btn">ENLAZAR CÁMARA IA</button>
-            <button id="btn-manual" class="secondary-btn">SIMULACIÓN MANUAL</button>
+            <p>SISTEMA ESPACIAL INMERSIVO<br><span style="color: var(--sgx-blue);">VR-First Architecture</span></p>
+            <button id="btn-start-vr" class="sgx-btn">INICIAR ENLACE VR</button>
         </div>
-    </div>
-
-    <div id="nav-controls" style="display: none;">
-        <button class="nav-btn" id="btn-patrones">Patrones</button>
-        <button class="nav-btn active" id="btn-inicio">Inicio</button>
-        <button class="nav-btn" id="btn-conceptos">Conceptos</button>
-        <button class="nav-btn" id="btn-creditos">Créditos</button>
-    </div>
-
-    <button class="nav-btn top-btn" id="btn-ai-toggle" style="display: none;">📸 ACTIVAR IA</button>
-    
-    <div id="hud" style="display: none;">
-        <b style="color:var(--sgx-yellow)">SISTEMA DE RASTREO ACTIVO</b><br>
-        MODO: <span id="hud-mode">Manual</span><br>
-        TRACK-X: <span id="hud-x">0.00</span><br>
-        TRACK-Y: <span id="hud-y">0.00</span>
     </div>
 
     <script type="module">
         import * as THREE from 'three';
-        import GUI from 'lil-gui';
-        // 1. IMPORTACIÓN DEL MÓDULO VR
         import { VRButton } from 'three/addons/webxr/VRButton.js';
+        import { XRControllerModelFactory } from 'three/addons/webxr/XRControllerModelFactory.js';
 
-        const isExported = window.IS_EXPORTED || false;
-
-        const patternTextures = {
-            'Base Verde': 'https://static.wixstatic.com/media/fe81a7_07aecfdb3b044909b0b267dfe7eecd96~mv2.png',
-            'Lx Musx': 'https://static.wixstatic.com/media/fe81a7_8e633cf8bcb3446d9b4cbe133dfcbce1~mv2.png',
-            'Roelephantom': 'https://static.wixstatic.com/media/fe81a7_92284537ab6d4d85b7f0143599e927a8~mv2.png',
-            'Roots Disorder': 'https://static.wixstatic.com/media/fe81a7_92284537ab6d4d85b7f0143599e927a8~mv2.png',
-            'Dark Cupcake': 'https://static.wixstatic.com/media/fe81a7_57282853d2e74770ba081e88b6fe01fa~mv2.png',
-            'The Highgineer': 'https://static.wixstatic.com/media/fe81a7_a5474248be1d408eb59d4a90872ecd2a~mv2.png',
-            'Kstillo': 'https://static.wixstatic.com/media/fe81a7_c2420b5aecb246ad9d3af8266aeebfd5~mv2.png'
-        };
-
-        const SGX = {
-            targetCamX: 0, targetCamY: 0,
-            currentCamX: 0, currentCamY: 0,
-            targetAngle: 0, currentAngle: 0,
-            currentCamZBase: 8,
-            trackingMode: 'Idle',
-            
-            config: {
-                boxWidth: 26, boxHeight: 16, boxDepth: 26,
-                boxTextureUrl: patternTextures['Base Verde'],
-                textureScale: 0.15,
-                showGrids: true,
-                camDistance: 8,
-                modo: 'Portal (Físico)',
-                amplitudX: 12.0, amplitudY: 8.0, suavizado: 0.05,
-                invertirX: false, invertirY: false,
-                activeFrame: 0,
-                frameStyle: 'Neon Glow',
-                remoteImageUrl: 'https://static.wixstatic.com/media/fe81a7_52e1c777fa55462290827691e4b3d3b2~mv2.png',
-                
-                injectRemote: () => GalleryManager.injectTexture(SGX.config.activeFrame, SGX.config.remoteImageUrl),
-                uploadAction: () => document.getElementById('local-image-upload').click(),
-                resetFrames: () => GalleryManager.resetDefaultTextures(),
-                exportAction: () => exportGallery()
-            }
-        };
-
-        if (isExported && window.EXPORTED_CONFIG) {
-            Object.assign(SGX.config, window.EXPORTED_CONFIG);
-        }
-
-        function exportGallery() {
-            const configPayload = JSON.stringify({ ...SGX.config, frameUrls: GalleryManager.frames.map(f => f.url) });
-            const htmlClone = document.documentElement.cloneNode(true);
-            htmlClone.querySelectorAll('.lil-gui').forEach(el => el.remove());
-            htmlClone.querySelectorAll('script#export-config').forEach(el => el.remove());
-            htmlClone.querySelectorAll('#ui-layer, #btn-ai-toggle, #hud').forEach(el => el.style.display = 'none');
-
-            const script = document.createElement('script');
-            script.id = 'export-config';
-            script.textContent = `window.IS_EXPORTED = true; window.EXPORTED_CONFIG = ${configPayload};`;
-            htmlClone.querySelector('head').insertBefore(script, htmlClone.querySelector('head').firstChild);
-
-            const finalHTML = '<!DOCTYPE html>\n<html lang="es">\n' + htmlClone.innerHTML + '\n</html>';
-            const blob = new Blob([finalHTML], { type: 'text/html' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = "SGX_Infinite_Borikua_Galeria.html";
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-        }
-
+        // --- CORE ENGINE ---
         const scene = new THREE.Scene();
-        scene.fog = new THREE.FogExp2(0x020202, 0.018);
-        
-        // 2. ENVOLVER LA CÁMARA PARA VR
-        // Esto permite mover al usuario al centro del cuarto (0,0,0) sin interferir con el tracking local del casco
-        const cameraGroup = new THREE.Group();
-        scene.add(cameraGroup);
+        scene.fog = new THREE.FogExp2(0x020202, 0.015);
 
-        const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 1000);
-        cameraGroup.add(camera);
-
-        const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
         renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
         renderer.outputEncoding = THREE.sRGBEncoding;
-        renderer.toneMapping = THREE.ACESFilmicToneMapping;
-        
-        // 3. ACTIVAR WEBXR Y AÑADIR EL BOTÓN AL DOM
         renderer.xr.enabled = true;
         document.getElementById('scene-container').appendChild(renderer.domElement);
-        document.body.appendChild(VRButton.createButton(renderer));
 
-        const amb = new THREE.AmbientLight(0xffffff, 0.5);
-        scene.add(amb);
-        const spot = new THREE.SpotLight(0xffffff, 1.8);
+        // --- UI HIJACKING ---
+        // Instanciamos el botón VR pero lo escondemos con CSS
+        const vrBtnObj = VRButton.createButton(renderer);
+        document.body.appendChild(vrBtnObj);
+        
+        // Conectamos nuestro botón SGX al trigger del visor
+        document.getElementById('btn-start-vr').addEventListener('click', () => {
+            vrBtnObj.click(); // Fuerza el handshake de WebXR
+            document.getElementById('ui-layer').style.display = 'none'; // Desaparece la UI
+        });
+
+        // --- PLAYER RIG (CRÍTICO PARA LOCOMOTION) ---
+        // En vez de añadir la cámara a la escena, la metemos en un Rig.
+        // Moveremos el Rig con el joystick, y la cámara se moverá sola con la cabeza.
+        const playerRig = new THREE.Group();
+        playerRig.position.set(0, 0, 0);
+        scene.add(playerRig);
+
+        const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 1000);
+        playerRig.add(camera);
+
+        // --- ILUMINACIÓN ---
+        scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+        const spot = new THREE.SpotLight(0xffffff, 2);
         spot.position.set(0, 10, 5);
         spot.angle = Math.PI / 3;
-        spot.penumbra = 0.6;
-        spot.decay = 2;
-        spot.distance = 60;
         scene.add(spot);
 
-        let roomGroup = new THREE.Group();
+        // --- GALERÍA (ESTÁTICA PARA PERFORMANCE VR) ---
+        const roomGroup = new THREE.Group();
         scene.add(roomGroup);
-        let roomMesh, gridBottom, gridTop;
 
-        const boxTexLoader = new THREE.TextureLoader();
-        boxTexLoader.setCrossOrigin('anonymous');
-        let currentTexUrl = '';
-        let baseTex = null;
+        const w = 26, h = 16, d = 26;
+        const boxGeo = new THREE.BoxGeometry(w, h, d);
+        const texLoader = new THREE.TextureLoader();
+        texLoader.load('https://static.wixstatic.com/media/fe81a7_07aecfdb3b044909b0b267dfe7eecd96~mv2.png', (tex) => {
+            tex.wrapS = THREE.RepeatWrapping; tex.wrapT = THREE.RepeatWrapping;
+            tex.repeat.set(-d * 0.15, h * 0.15);
+            const wallMat = new THREE.MeshStandardMaterial({ map: tex, side: THREE.BackSide, color: 0x555555 });
+            roomGroup.add(new THREE.Mesh(boxGeo, wallMat));
+        });
 
-        function initRoom() {
-            roomMesh = new THREE.Mesh(new THREE.BoxGeometry(1,1,1), []);
-            roomGroup.add(roomMesh);
-            GalleryManager.buildFrames(SGX.config.boxWidth, SGX.config.boxHeight, SGX.config.boxDepth);
-            updateRoomDimensions(); 
+        const gridBottom = new THREE.GridHelper(Math.max(w, d), 25, 0x32527B, 0x111111);
+        gridBottom.position.y = -h / 2 + 0.05;
+        roomGroup.add(gridBottom);
+
+        // --- MOTOR DE INTERACCIÓN (RAYCASTING Y CONTROLADORES) ---
+        const interactableObjects = [];
+        const raycaster = new THREE.Raycaster();
+        const tempMatrix = new THREE.Matrix4();
+
+        // Creamos un objeto 3D central para interactuar
+        const coreGeo = new THREE.OctahedronGeometry(1.5, 0);
+        const coreMat = new THREE.MeshStandardMaterial({ color: 0xFDCC0D, wireframe: true, emissive: 0x32527B, emissiveIntensity: 0.5 });
+        const interactiveCore = new THREE.Mesh(coreGeo, coreMat);
+        interactiveCore.position.set(0, 1.5, -5);
+        interactiveCore.userData.isInteractive = true; // Flag de validación
+        scene.add(interactiveCore);
+        interactableObjects.push(interactiveCore);
+
+        // Setup de Controladores (Manos)
+        const controllerModelFactory = new XRControllerModelFactory();
+        const laserMat = new THREE.LineBasicMaterial({ color: 0x00ffa3, linewidth: 2 });
+        const laserGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0,0,0), new THREE.Vector3(0,0,-1)]);
+
+        function setupController(index) {
+            const controller = renderer.xr.getController(index);
+            controller.addEventListener('selectstart', onSelectStart);
+            
+            // IMPORTANTE: Los mandos deben ser hijos del PlayerRig para que se muevan contigo
+            playerRig.add(controller);
+
+            const grip = renderer.xr.getControllerGrip(index);
+            grip.add(controllerModelFactory.createControllerModel(grip));
+            playerRig.add(grip);
+
+            const laser = new THREE.Line(laserGeo, laserMat);
+            laser.name = 'laser';
+            laser.scale.z = 10;
+            controller.add(laser);
+
+            return controller;
         }
 
-        function updateRoomDimensions() {
-            const { boxWidth: w, boxHeight: h, boxDepth: d, textureScale: tScale } = SGX.config;
+        const controller1 = setupController(0);
+        const controller2 = setupController(1);
+
+        // LÓGICA DE GATILLO (INTERACCIÓN)
+        function onSelectStart(event) {
+            const controller = event.target;
             
-            if (currentTexUrl !== SGX.config.boxTextureUrl) {
-                currentTexUrl = SGX.config.boxTextureUrl;
-                baseTex = boxTexLoader.load(currentTexUrl);
-                baseTex.wrapS = THREE.RepeatWrapping;
-                baseTex.wrapT = THREE.RepeatWrapping;
-                baseTex.encoding = THREE.sRGBEncoding;
-            }
+            // Disparar rayo láser matemáticamente
+            tempMatrix.identity().extractRotation(controller.matrixWorld);
+            raycaster.ray.origin.setFromMatrixPosition(controller.matrixWorld);
+            raycaster.ray.direction.set(0, 0, -1).applyMatrix4(tempMatrix);
 
-            roomMesh.geometry.dispose();
-            roomMesh.geometry = new THREE.BoxGeometry(w, h, d);
+            const hits = raycaster.intersectObjects(interactableObjects, false);
 
-            const createWallMat = (repeatU, repeatV) => {
-                const tex = baseTex.clone();
-                tex.repeat.set(-repeatU * tScale, repeatV * tScale);
-                tex.needsUpdate = true;
-                return new THREE.MeshStandardMaterial({
-                    map: tex, color: 0x777777, side: THREE.BackSide, roughness: 0.9, metalness: 0.1
-                });
-            };
-
-            const matX = createWallMat(d, h); 
-            const matY = createWallMat(w, d); 
-            const matZ = createWallMat(w, h); 
-
-            if (roomMesh.material && roomMesh.material.length > 0) {
-                roomMesh.material.forEach(m => { if (m.map) m.map.dispose(); m.dispose(); });
-            }
-
-            roomMesh.material = [matX, matX, matY, matY, matZ, matZ];
-
-            if (gridBottom) { gridBottom.geometry.dispose(); roomGroup.remove(gridBottom); gridBottom = null; }
-            if (gridTop) { gridTop.geometry.dispose(); roomGroup.remove(gridTop); gridTop = null; }
-
-            if (SGX.config.showGrids) {
-                gridBottom = new THREE.GridHelper(Math.max(w, d), 25, 0x32527B, 0x111111);
-                gridBottom.position.y = -h / 2 + 0.05;
-                roomGroup.add(gridBottom);
+            if (hits.length > 0) {
+                const hitObject = hits[0].object;
                 
-                gridTop = new THREE.GridHelper(Math.max(w, d), 25, 0xFDCC0D, 0x111111);
-                gridTop.position.y = h / 2 - 0.05;
-                roomGroup.add(gridTop);
-            }
+                if (hitObject.userData.isInteractive) {
+                    // Dopamina visual: Cambia color y escala temporalmente
+                    hitObject.material.color.setHex(Math.random() * 0xffffff);
+                    hitObject.scale.multiplyScalar(1.2);
+                    setTimeout(() => hitObject.scale.multiplyScalar(1/1.2), 150);
 
-            if (GalleryManager.frames.length > 0) GalleryManager.updateFramePositions(w, h, d);
-        }
-
-        const textureLoader = new THREE.TextureLoader();
-        textureLoader.setCrossOrigin('anonymous');
-        
-        const GalleryManager = {
-            frames: [], wallTitles: [],
-            
-            createLabelMesh: function(text) {
-                if (!text) return null;
-                const canvas = document.createElement('canvas');
-                canvas.width = 1024; canvas.height = 256;
-                const ctx = canvas.getContext('2d');
-                ctx.fillStyle = 'rgba(10, 10, 10, 0.85)'; ctx.fillRect(0, 0, canvas.width, canvas.height);
-                ctx.strokeStyle = '#32527B'; ctx.lineWidth = 12; ctx.strokeRect(0, 0, canvas.width, canvas.height);
-                ctx.font = 'bold 70px "Courier New", Courier, monospace';
-                ctx.fillStyle = '#FDCC0D'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-                ctx.fillText(text, canvas.width / 2, canvas.height / 2);
-                return new THREE.Mesh(new THREE.PlaneGeometry(4, 1), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(canvas), transparent: true }));
-            },
-
-            createWallTitle: function(text) {
-                const canvas = document.createElement('canvas');
-                canvas.width = 2048; canvas.height = 256;
-                const ctx = canvas.getContext('2d');
-                ctx.fillStyle = 'transparent'; ctx.fillRect(0, 0, canvas.width, canvas.height);
-                ctx.font = 'bold 120px "Courier New", Courier, monospace';
-                ctx.fillStyle = '#FFFFFF'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-                ctx.shadowColor = '#FDCC0D'; ctx.shadowBlur = 20;
-                ctx.fillText(text, canvas.width / 2, canvas.height / 2);
-                return new THREE.Mesh(new THREE.PlaneGeometry(18, 2.2), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(canvas), transparent: true, side: THREE.DoubleSide }));
-            },
-
-            buildFrames: function(w, h, d) {
-                this.frames.forEach(f => { scene.remove(f.group); /* disposal logic omitted for brevity */ });
-                this.frames = [];
-                this.wallTitles.forEach(t => scene.remove(t));
-                this.wallTitles = [];
-
-                const titleLeft = this.createWallTitle("PATRONES"); titleLeft.rotation.y = Math.PI/2; scene.add(titleLeft); this.wallTitles.push(titleLeft);
-                const titleRight = this.createWallTitle("CONCEPTOS"); titleRight.rotation.y = -Math.PI/2; scene.add(titleRight); this.wallTitles.push(titleRight);
-                const titleCredits = this.createWallTitle("CRÉDITOS Y CREADORES"); titleCredits.rotation.y = Math.PI; scene.add(titleCredits); this.wallTitles.push(titleCredits);
-
-                const framesData = [
-                    { height: 8, label: '' }, { height: 4.2, label: 'Lx Musx' }, { height: 4.2, label: 'Roelephantom' }, 
-                    { height: 4.2, label: 'Roots Disorder' }, { height: 4.2, label: 'Dark Cupcake' }, { height: 4.2, label: 'The Highgineer' }, 
-                    { height: 4.2, label: 'Kstillo' }, { height: 4.2, label: 'Collar de Cemi' }, { height: 4.2, label: 'Pantallas' }, 
-                    { height: 4.2, label: 'Pulseras' }, { height: 4.2, label: 'The Highgineer/Kstillo' }, { height: 4.2, label: 'Lx Musx/Roelephantom' }, 
-                    { height: 4.2, label: 'Dark Cupcake/Roots Disorder' }, { height: 8, label: '' }
-                ];
-
-                framesData.forEach((data, index) => {
-                    const group = new THREE.Group();
-                    const canvasMesh = new THREE.Mesh(new THREE.PlaneGeometry(data.height, data.height), new THREE.MeshBasicMaterial({ color: 0x222222 }));
-                    const borderMesh = new THREE.Mesh(new THREE.BoxGeometry(data.height + 0.4, data.height + 0.4, 0.2), this.getStyleMaterial());
-                    borderMesh.position.z = -0.15;
-
-                    group.add(borderMesh); group.add(canvasMesh);
-
-                    let labelMesh = null;
-                    if(data.label) {
-                        labelMesh = this.createLabelMesh(data.label);
-                        labelMesh.position.set(0, -(data.height / 2) - 0.7, 0);
-                        group.add(labelMesh);
+                    // Dopamina física: Haptic Feedback (Vibración)
+                    const session = renderer.xr.getSession();
+                    if (session && event.data && event.data.gamepad) {
+                        const hapticActuator = event.data.gamepad.hapticActuators?.[0];
+                        if (hapticActuator) hapticActuator.pulse(1.0, 100); // Fuerza 1.0, 100ms
                     }
-                    
-                    if(index === 0) group.rotation.y = 0;
-                    else if(index >= 1 && index <= 6) group.rotation.y = Math.PI/2;
-                    else if(index >= 7 && index <= 12) group.rotation.y = -Math.PI/2;
-                    else group.rotation.y = Math.PI;
-                    
-                    scene.add(group);
-                    this.frames.push({ group, canvasMesh, borderMesh, labelMesh, height: data.height, url: '' });
-                });
-
-                this.resetDefaultTextures();
-            },
-
-            updateFramePositions: function(w, h, d) {
-                if(this.wallTitles.length >= 3) {
-                    this.wallTitles[0].position.set(-w/2 + 0.15, h/2 - 2, 0); 
-                    this.wallTitles[1].position.set(w/2 - 0.15, h/2 - 2, 0); 
-                    this.wallTitles[2].position.set(0, h/2 - 2, d/2 - 0.15); 
                 }
-
-                const frameConfigs = [
-                    { px: 0, py: 0, pz: -d/2 + 0.1 },
-                    { px: -w/2 + 0.1, py: h/5, pz: -d/3.2 }, { px: -w/2 + 0.1, py: h/5, pz: 0 }, { px: -w/2 + 0.1, py: h/5, pz: d/3.2 },
-                    { px: -w/2 + 0.1, py: -h/5, pz: -d/3.2 }, { px: -w/2 + 0.1, py: -h/5, pz: 0 }, { px: -w/2 + 0.1, py: -h/5, pz: d/3.2 },
-                    { px: w/2 - 0.1, py: h/5, pz: -d/3.2 }, { px: w/2 - 0.1, py: h/5, pz: 0 }, { px: w/2 - 0.1, py: h/5, pz: d/3.2 },
-                    { px: w/2 - 0.1, py: -h/5, pz: -d/3.2 }, { px: w/2 - 0.1, py: -h/5, pz: 0 }, { px: w/2 - 0.1, py: -h/5, pz: d/3.2 },
-                    { px: 0, py: 0, pz: d/2 - 0.1 }
-                ];
-
-                this.frames.forEach((f, i) => { if(frameConfigs[i]) f.group.position.set(frameConfigs[i].px, frameConfigs[i].py, frameConfigs[i].pz); });
-            },
-
-            getStyleMaterial: function() {
-                switch(SGX.config.frameStyle) {
-                    case 'Neon Glow': return new THREE.MeshBasicMaterial({ color: 0xFDCC0D });
-                    case 'Industrial Blue': return new THREE.MeshStandardMaterial({ color: 0x32527B, metalness: 0.8, roughness: 0.2 });
-                    case 'Minimalist White': return new THREE.MeshBasicMaterial({ color: 0xffffff });
-                    default: return new THREE.MeshBasicMaterial({ color: 0x444444 });
-                }
-            },
-
-            updateGlobalStyle: function() {
-                const newMat = this.getStyleMaterial();
-                this.frames.forEach(f => { f.borderMesh.material.dispose(); f.borderMesh.material = newMat; });
-            },
-
-            injectTexture: function(frameIndex, url) {
-                if(!this.frames[frameIndex]) return;
-                this.frames[frameIndex].url = url; 
-                textureLoader.load(url, (texture) => {
-                    texture.encoding = THREE.sRGBEncoding;
-                    const aspect = texture.image.width / texture.image.height;
-                    const canvasMesh = this.frames[frameIndex].canvasMesh;
-                    const borderMesh = this.frames[frameIndex].borderMesh;
-                    const targetH = this.frames[frameIndex].height;
-                    
-                    canvasMesh.geometry.dispose();
-                    canvasMesh.geometry = new THREE.PlaneGeometry(targetH * aspect, targetH);
-                    borderMesh.geometry.dispose();
-                    borderMesh.geometry = new THREE.BoxGeometry((targetH * aspect) + 0.4, targetH + 0.4, 0.2);
-                    canvasMesh.material.map = texture;
-                    canvasMesh.material.color.setHex(0xffffff);
-                    canvasMesh.material.needsUpdate = true;
-                });
-            },
-
-            resetDefaultTextures: function() {
-                if (isExported && SGX.config.frameUrls && SGX.config.frameUrls.length > 0) {
-                    this.frames.forEach((f, i) => { if (SGX.config.frameUrls[i]) this.injectTexture(i, SGX.config.frameUrls[i]); });
-                    return;
-                }
-                const defaultUrls = [
-                    'https://static.wixstatic.com/media/fe81a7_b39d8b1fd26b4cf49a7636a787d5753e~mv2.png', 'https://static.wixstatic.com/media/fe81a7_8e633cf8bcb3446d9b4cbe133dfcbce1~mv2.png',
-                    'https://static.wixstatic.com/media/fe81a7_92284537ab6d4d85b7f0143599e927a8~mv2.png', 'https://static.wixstatic.com/media/fe81a7_50a00e8777db48eaa8ccac45f762a408~mv2.png',
-                    'https://static.wixstatic.com/media/fe81a7_57282853d2e74770ba081e88b6fe01fa~mv2.png', 'https://static.wixstatic.com/media/fe81a7_a5474248be1d408eb59d4a90872ecd2a~mv2.png',
-                    'https://static.wixstatic.com/media/fe81a7_c2420b5aecb246ad9d3af8266aeebfd5~mv2.png', 'https://static.wixstatic.com/media/fe81a7_805b74a1b73d47fa83c446130585cd72~mv2.png',
-                    'https://static.wixstatic.com/media/fe81a7_543abb3e04aa4488928129ccae33875a~mv2.png', 'https://static.wixstatic.com/media/fe81a7_cb6714af21974fe689652004d260cbc8~mv2.png',
-                    'https://static.wixstatic.com/media/fe81a7_a0b0590dc0844d1b88d21763d52696c7~mv2.png', 'https://static.wixstatic.com/media/fe81a7_76f32d6280db4b508bec103ffd07bcd4~mv2.png',
-                    'https://static.wixstatic.com/media/fe81a7_3640b51d386445ffa6f393c73785d8af~mv2.png', 'https://static.wixstatic.com/media/fe81a7_737e849b909c468998928172fa1ea821~mv2.png'
-                ];
-                this.frames.forEach((f, i) => this.injectTexture(i, defaultUrls[i]));
-            }
-        };
-
-        initRoom();
-        
-        if (isExported) {
-            document.getElementById('ui-layer').style.display = 'none';
-            document.getElementById('nav-controls').style.display = 'flex';
-            document.getElementById('btn-ai-toggle').style.display = 'none';
-            document.getElementById('hud').style.display = 'none';
-            SGX.trackingMode = 'Manual';
-        }
-
-        document.getElementById('btn-patrones').onclick = () => { SGX.targetAngle = -Math.PI / 2; updateNavUI('btn-patrones'); };
-        document.getElementById('btn-inicio').onclick = () => { SGX.targetAngle = 0; updateNavUI('btn-inicio'); };
-        document.getElementById('btn-conceptos').onclick = () => { SGX.targetAngle = Math.PI / 2; updateNavUI('btn-conceptos'); };
-        document.getElementById('btn-creditos').onclick = () => { SGX.targetAngle = Math.PI; updateNavUI('btn-creditos'); };
-
-        function updateNavUI(activeId) {
-            document.querySelectorAll('.nav-btn').forEach(btn => btn.classList.remove('active'));
-            document.getElementById(activeId).classList.add('active');
-        }
-
-        document.getElementById('local-image-upload').addEventListener('change', (e) => {
-            const file = e.target.files[0];
-            if (file) GalleryManager.injectTexture(SGX.config.activeFrame, URL.createObjectURL(file));
-        });
-
-        function initGUI() {
-            const gui = new GUI({ title: '⚙️ SGX ARCHITECT V4' });
-            const galleryFolder = gui.addFolder('🖼️ Gallery Injection');
-            galleryFolder.add(SGX.config, 'activeFrame', { '0. Inicio': 0, '1. Patrones: Lx Musx': 1, '2. Patrones: Roelephantom': 2, '3. Patrones: Roots Disorder': 3, '4. Patrones: Dark Cupcake': 4, '5. Patrones: The Highgineer': 5, '6. Patrones: Kstillo': 6, '7. Conceptos: Collar Cemi': 7, '8. Conceptos: Pantallas': 8, '9. Conceptos: Pulseras': 9, '10. Conceptos: Wayuko TH/Ks': 10, '11. Conceptos: Wayuko LM/Ro': 11, '12. Conceptos: Wayuko DC/RD': 12, '13. Créditos': 13 }).name('Seleccionar Marco').onChange(v => SGX.config.activeFrame = parseInt(v));
-            galleryFolder.add(SGX.config, 'remoteImageUrl').name('URL de Imagen');
-            galleryFolder.add(SGX.config, 'injectRemote').name('🔗 Inyectar URL');
-            galleryFolder.add(SGX.config, 'uploadAction').name('⬆️ Subir Local');
-            galleryFolder.add(SGX.config, 'frameStyle', ['Neon Glow', 'Industrial Blue', 'Minimalist White', 'Dark Matter']).name('Estilo Marco').onChange(() => GalleryManager.updateGlobalStyle());
-            galleryFolder.add(SGX.config, 'resetFrames').name('↻ Reset Defaults');
-
-            const roomFolder = gui.addFolder('📐 Dimensiones y Entorno');
-            roomFolder.add(SGX.config, 'boxTextureUrl', patternTextures).name('Textura Paredes').onChange(updateRoomDimensions);
-            roomFolder.add(SGX.config, 'boxWidth', 10, 80).name('Ancho (Paredes L/R)').onChange(updateRoomDimensions);
-            roomFolder.add(SGX.config, 'boxHeight', 10, 40).name('Alto (Techo)').onChange(updateRoomDimensions);
-            roomFolder.add(SGX.config, 'boxDepth', 10, 80).name('Profundidad (Frente/Fondo)').onChange(updateRoomDimensions);
-            roomFolder.add(SGX.config, 'camDistance', 0, 30).name('Distancia Cámara Base');
-
-            const physFolder = gui.addFolder('🔋 Tracking Physics');
-            physFolder.add(SGX.config, 'modo', ['Portal (Físico)', 'Espejo (Sigue Mirada)']);
-            physFolder.add(SGX.config, 'amplitudX', 1, 30).name('Amplitud X');
-            physFolder.add(SGX.config, 'amplitudY', 1, 30).name('Amplitud Y');
-            physFolder.add(SGX.config, 'suavizado', 0.001, 0.5).name('Inercia');
-            physFolder.add(SGX.config, 'invertirX').name('Invertir X');
-            physFolder.add(SGX.config, 'invertirY').name('Invertir Y');
-
-            gui.add(SGX.config, 'exportAction').name('💾 Exportar Galería (Limpia)');
-            gui.open();
-        }
-
-        function updateTracking(nx, ny) {
-            const dirX = SGX.config.invertirX ? -1 : 1;
-            const dirY = SGX.config.invertirY ? -1 : 1;
-            const multiplier = SGX.config.modo === 'Portal (Físico)' ? -1 : 1;
-            SGX.targetCamX = nx * SGX.config.amplitudX * dirX * multiplier;
-            SGX.targetCamY = -ny * SGX.config.amplitudY * dirY * multiplier;
-            document.getElementById('hud-x').innerText = SGX.targetCamX.toFixed(2);
-            document.getElementById('hud-y').innerText = SGX.targetCamY.toFixed(2);
-        }
-
-        window.addEventListener('pointermove', (e) => {
-            if (SGX.trackingMode === 'Manual') {
-                const nx = (e.clientX / window.innerWidth - 0.5) * 2;
-                const ny = (e.clientY / window.innerHeight - 0.5) * 2;
-                updateTracking(nx, ny);
-            }
-        });
-
-        const video = document.getElementById('webcam_feed');
-        const faceMesh = new window.FaceMesh({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`});
-        faceMesh.setOptions({ maxNumFaces: 1, refineLandmarks: false, minDetectionConfidence: 0.5 });
-        faceMesh.onResults((res) => {
-            if (res.multiFaceLandmarks && res.multiFaceLandmarks.length > 0) {
-                const nose = res.multiFaceLandmarks[0][1];
-                updateTracking((nose.x - 0.5) * 2, (nose.y - 0.5) * 2);
-            }
-        });
-
-        async function aiLoop() {
-            if (SGX.trackingMode === 'Face IA') {
-                await faceMesh.send({image: video});
-                requestAnimationFrame(aiLoop);
             }
         }
 
-        function launch(mode) {
-            SGX.trackingMode = mode;
-            document.getElementById('ui-layer').style.opacity = '0';
-            setTimeout(() => {
-                document.getElementById('ui-layer').style.display = 'none';
-                document.getElementById('nav-controls').style.display = 'flex';
-                
-                if (!isExported) {
-                    document.getElementById('btn-ai-toggle').style.display = 'block';
-                    document.getElementById('hud').style.display = 'block';
-                    document.getElementById('hud-mode').innerText = mode;
-                    if (!document.querySelector('.lil-gui')) initGUI();
+        // --- SISTEMA DE LOCOMOTION (JOYSTICK MOVEMENT) ---
+        const moveSpeed = 0.05;
+        const playerDirection = new THREE.Vector3();
+        const playerRight = new THREE.Vector3();
+
+        function handleLocomotion() {
+            const session = renderer.xr.getSession();
+            if (!session) return;
+
+            // Extraer datos de los mandos
+            for (const source of session.inputSources) {
+                if (source && source.gamepad) {
+                    // Los ejes de los pulgares (Thumbsticks) suelen ser el índice 2 (X) y 3 (Y)
+                    const xAxis = source.gamepad.axes[2]; 
+                    const yAxis = source.gamepad.axes[3]; 
+
+                    // Zona muerta para evitar drift (movimiento fantasma)
+                    if (Math.abs(xAxis) > 0.1 || Math.abs(yAxis) > 0.1) {
+                        
+                        // Determinar hacia dónde está mirando el casco (Head-Steering)
+                        camera.getWorldDirection(playerDirection);
+                        playerDirection.y = 0; // Evita que vueles o te entierres
+                        playerDirection.normalize();
+
+                        // Calcular el vector "Derecha" en base a dónde miras
+                        playerRight.crossVectors(camera.up, playerDirection).normalize();
+
+                        // Aplicar la traslación al PlayerRig
+                        playerRig.position.addScaledVector(playerDirection, -yAxis * moveSpeed);
+                        playerRig.position.addScaledVector(playerRight, xAxis * moveSpeed);
+                    }
                 }
-            }, 600);
+            }
         }
 
-        const btnAiToggle = document.getElementById('btn-ai-toggle');
-        btnAiToggle.onclick = async () => {
-            if (SGX.trackingMode === 'Face IA') {
-                SGX.trackingMode = 'Manual';
-                btnAiToggle.innerText = "📸 ACTIVAR IA";
-                document.getElementById('hud-mode').innerText = 'Manual';
+        // --- HOVER LÁSER EN TIEMPO REAL ---
+        function updateLasers(controller) {
+            if (!controller) return;
+            const laser = controller.getObjectByName('laser');
+            
+            tempMatrix.identity().extractRotation(controller.matrixWorld);
+            raycaster.ray.origin.setFromMatrixPosition(controller.matrixWorld);
+            raycaster.ray.direction.set(0, 0, -1).applyMatrix4(tempMatrix);
+
+            const hits = raycaster.intersectObjects(interactableObjects, false);
+            
+            // Si el láser choca con el objeto, acórtalo. Si no, hazlo de 10 metros.
+            if (hits.length > 0) {
+                laser.scale.z = hits[0].distance;
             } else {
-                try {
-                    const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } });
-                    video.srcObject = stream;
-                    video.onloadedmetadata = () => { video.play(); SGX.trackingMode = 'Face IA'; btnAiToggle.innerText = "🖱️ MODO MANUAL"; document.getElementById('hud-mode').innerText = 'Face IA'; aiLoop(); };
-                } catch (e) { alert("No se detectó cámara o permiso denegado."); }
+                laser.scale.z = 10;
             }
-        };
+        }
 
-        document.getElementById('btn-manual').onclick = () => launch('Manual');
-        document.getElementById('btn-start').onclick = async () => {
-            try {
-                const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } });
-                video.srcObject = stream;
-                video.onloadedmetadata = () => { video.play(); launch('Face IA'); aiLoop(); };
-            } catch (e) { launch('Manual'); }
-        };
+        // --- RENDER LOOP (VR NATIVO) ---
+        renderer.setAnimationLoop(() => {
+            // Rotación suave del núcleo para darle vida
+            interactiveCore.rotation.x += 0.005;
+            interactiveCore.rotation.y += 0.005;
 
-        // 4. BIFURCACIÓN DEL RENDER LOOP (EL FIX MAESTRO)
-        function render() {
-            // Si el Quest no está puesto/presentando, usamos tu motor de Parallax (Mouse o Face IA)
-            if (!renderer.xr.isPresenting) {
-                SGX.currentAngle += (SGX.targetAngle - SGX.currentAngle) * 0.05;
-
-                let targetZBase = (SGX.targetAngle === 0) ? SGX.config.camDistance : 0;
-                SGX.currentCamZBase += (targetZBase - SGX.currentCamZBase) * 0.05;
-
-                SGX.currentCamX += (SGX.targetCamX - SGX.currentCamX) * SGX.config.suavizado;
-                SGX.currentCamY += (SGX.targetCamY - SGX.currentCamY) * SGX.config.suavizado;
-
-                const offsetX = Math.cos(SGX.currentAngle) * SGX.currentCamX;
-                const offsetZ = Math.sin(SGX.currentAngle) * SGX.currentCamX;
-
-                camera.position.x = offsetX;
-                camera.position.y = SGX.currentCamY;
-                camera.position.z = SGX.currentCamZBase + offsetZ; 
-
-                const lookDist = 20;
-                const lookX = camera.position.x + Math.sin(SGX.currentAngle) * lookDist;
-                const lookZ = camera.position.z - Math.cos(SGX.currentAngle) * lookDist;
-                
-                camera.lookAt(lookX, camera.position.y, lookZ);
-            } else {
-                // En VR, la cámara necesita estar libre de sobreescrituras matemáticas para que el visor no colapse.
-                // Posicionamos el `cameraGroup` en el centro (0,0,0) para que el usuario esté rodeado por la galería.
-                cameraGroup.position.set(0, 0, 0); 
+            if (renderer.xr.isPresenting) {
+                handleLocomotion(); // Chequea el joystick cada frame
+                updateLasers(controller1);
+                updateLasers(controller2);
             }
 
             renderer.render(scene, camera);
-        }
-        
-        // 5. REEMPLAZO DE ANIMATION FRAME
-        renderer.setAnimationLoop(render);
-        
+        });
+
         window.addEventListener('resize', () => {
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
         });
-
     </script>
 </body>
 </html>
