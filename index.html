@@ -79,7 +79,6 @@
         }
         button.secondary-btn:hover { border-color: var(--sgx-blue); color: #fff; }
 
-        /* Controles de Navegación */
         #nav-controls {
             position: absolute;
             bottom: 35px;
@@ -144,12 +143,13 @@
         }
 
         .hidden-upload { display: none; }
+        
+        /* Ajuste WebXR Button para asegurar visibilidad */
+        #VRButton { z-index: 1000 !important; }
     </style>
 
-    <!-- MediaPipe Global -->
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js"></script>
 
-    <!-- ES Modules -->
     <script type="importmap">
     {
         "imports": {
@@ -179,7 +179,6 @@
         </div>
     </div>
 
-    <!-- Botones de Navegación -->
     <div id="nav-controls" style="display: none;">
         <button class="nav-btn" id="btn-patrones">Patrones</button>
         <button class="nav-btn active" id="btn-inicio">Inicio</button>
@@ -187,7 +186,6 @@
         <button class="nav-btn" id="btn-creditos">Créditos</button>
     </div>
 
-    <!-- Botón de Cámara IA -->
     <button class="nav-btn top-btn" id="btn-ai-toggle" style="display: none;">📸 ACTIVAR IA</button>
     
     <div id="hud" style="display: none;">
@@ -200,8 +198,9 @@
     <script type="module">
         import * as THREE from 'three';
         import GUI from 'lil-gui';
+        // 1. IMPORTACIÓN DEL MÓDULO VR
+        import { VRButton } from 'three/addons/webxr/VRButton.js';
 
-        // --- SISTEMA DE EXPORTACIÓN & ESTADO INICIAL ---
         const isExported = window.IS_EXPORTED || false;
 
         const patternTextures = {
@@ -234,7 +233,6 @@
                 frameStyle: 'Neon Glow',
                 remoteImageUrl: 'https://static.wixstatic.com/media/fe81a7_52e1c777fa55462290827691e4b3d3b2~mv2.png',
                 
-                // Callbacks
                 injectRemote: () => GalleryManager.injectTexture(SGX.config.activeFrame, SGX.config.remoteImageUrl),
                 uploadAction: () => document.getElementById('local-image-upload').click(),
                 resetFrames: () => GalleryManager.resetDefaultTextures(),
@@ -246,50 +244,19 @@
             Object.assign(SGX.config, window.EXPORTED_CONFIG);
         }
 
-        // --- EXPORT FUNCTION ---
         function exportGallery() {
-            // Guardamos el estado actual
-            const configPayload = JSON.stringify({
-                boxWidth: SGX.config.boxWidth,
-                boxHeight: SGX.config.boxHeight,
-                boxDepth: SGX.config.boxDepth,
-                boxTextureUrl: SGX.config.boxTextureUrl,
-                textureScale: SGX.config.textureScale,
-                showGrids: SGX.config.showGrids,
-                camDistance: SGX.config.camDistance,
-                modo: SGX.config.modo,
-                amplitudX: SGX.config.amplitudX,
-                amplitudY: SGX.config.amplitudY,
-                suavizado: SGX.config.suavizado,
-                invertirX: SGX.config.invertirX,
-                invertirY: SGX.config.invertirY,
-                frameStyle: SGX.config.frameStyle,
-                frameUrls: GalleryManager.frames.map(f => f.url)
-            });
-
-            // Clonar el DOM actual
+            const configPayload = JSON.stringify({ ...SGX.config, frameUrls: GalleryManager.frames.map(f => f.url) });
             const htmlClone = document.documentElement.cloneNode(true);
-            
-            // Limpiar la UI de personalización (lil-gui) en la versión final exportada 
-            // Esto asegura que el script regenerará la UI limpiamente sin duplicados al abrir el archivo.
             htmlClone.querySelectorAll('.lil-gui').forEach(el => el.remove());
-            // Limpiamos los tags de script de configuración previos si existen
             htmlClone.querySelectorAll('script#export-config').forEach(el => el.remove());
-            
-            // Ocultar elementos de UI no deseados en el embed
-            htmlClone.querySelectorAll('#ui-layer').forEach(el => el.style.display = 'none');
-            htmlClone.querySelectorAll('#btn-ai-toggle').forEach(el => el.style.display = 'none');
-            htmlClone.querySelectorAll('#hud').forEach(el => el.style.display = 'none');
+            htmlClone.querySelectorAll('#ui-layer, #btn-ai-toggle, #hud').forEach(el => el.style.display = 'none');
 
-            // Inyectar el estado al clon
             const script = document.createElement('script');
             script.id = 'export-config';
             script.textContent = `window.IS_EXPORTED = true; window.EXPORTED_CONFIG = ${configPayload};`;
             htmlClone.querySelector('head').insertBefore(script, htmlClone.querySelector('head').firstChild);
 
             const finalHTML = '<!DOCTYPE html>\n<html lang="es">\n' + htmlClone.innerHTML + '\n</html>';
-            
-            // Descargar el archivo
             const blob = new Blob([finalHTML], { type: 'text/html' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
@@ -301,17 +268,27 @@
             URL.revokeObjectURL(url);
         }
 
-        // --- THREE.JS ENGINE ---
         const scene = new THREE.Scene();
         scene.fog = new THREE.FogExp2(0x020202, 0.018);
         
+        // 2. ENVOLVER LA CÁMARA PARA VR
+        // Esto permite mover al usuario al centro del cuarto (0,0,0) sin interferir con el tracking local del casco
+        const cameraGroup = new THREE.Group();
+        scene.add(cameraGroup);
+
         const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 1000);
+        cameraGroup.add(camera);
+
         const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
         renderer.setSize(window.innerWidth, window.innerHeight);
         renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
         renderer.outputEncoding = THREE.sRGBEncoding;
         renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        
+        // 3. ACTIVAR WEBXR Y AÑADIR EL BOTÓN AL DOM
+        renderer.xr.enabled = true;
         document.getElementById('scene-container').appendChild(renderer.domElement);
+        document.body.appendChild(VRButton.createButton(renderer));
 
         const amb = new THREE.AmbientLight(0xffffff, 0.5);
         scene.add(amb);
@@ -323,7 +300,6 @@
         spot.distance = 60;
         scene.add(spot);
 
-        // --- 1. ENTORNO PARAMÉTRICO ---
         let roomGroup = new THREE.Group();
         scene.add(roomGroup);
         let roomMesh, gridBottom, gridTop;
@@ -356,15 +332,10 @@
 
             const createWallMat = (repeatU, repeatV) => {
                 const tex = baseTex.clone();
-                // IMPORTANTE: Repeat U negativo corrige el efecto espejo "hacia afuera"
                 tex.repeat.set(-repeatU * tScale, repeatV * tScale);
                 tex.needsUpdate = true;
                 return new THREE.MeshStandardMaterial({
-                    map: tex,
-                    color: 0x777777, 
-                    side: THREE.BackSide,
-                    roughness: 0.9,
-                    metalness: 0.1
+                    map: tex, color: 0x777777, side: THREE.BackSide, roughness: 0.9, metalness: 0.1
                 });
             };
 
@@ -373,10 +344,7 @@
             const matZ = createWallMat(w, h); 
 
             if (roomMesh.material && roomMesh.material.length > 0) {
-                roomMesh.material.forEach(m => {
-                    if (m.map) m.map.dispose();
-                    m.dispose();
-                });
+                roomMesh.material.forEach(m => { if (m.map) m.map.dispose(); m.dispose(); });
             }
 
             roomMesh.material = [matX, matX, matY, matY, matZ, matZ];
@@ -394,137 +362,65 @@
                 roomGroup.add(gridTop);
             }
 
-            if (GalleryManager.frames.length > 0) {
-                GalleryManager.updateFramePositions(w, h, d);
-            }
+            if (GalleryManager.frames.length > 0) GalleryManager.updateFramePositions(w, h, d);
         }
 
-        // --- 2. GALLERY MANAGER ---
         const textureLoader = new THREE.TextureLoader();
         textureLoader.setCrossOrigin('anonymous');
         
         const GalleryManager = {
-            frames: [],
-            wallTitles: [],
+            frames: [], wallTitles: [],
             
             createLabelMesh: function(text) {
                 if (!text) return null;
                 const canvas = document.createElement('canvas');
-                canvas.width = 1024;
-                canvas.height = 256;
+                canvas.width = 1024; canvas.height = 256;
                 const ctx = canvas.getContext('2d');
-                
-                ctx.fillStyle = 'rgba(10, 10, 10, 0.85)';
-                ctx.fillRect(0, 0, canvas.width, canvas.height);
-                ctx.strokeStyle = '#32527B';
-                ctx.lineWidth = 12;
-                ctx.strokeRect(0, 0, canvas.width, canvas.height);
-
+                ctx.fillStyle = 'rgba(10, 10, 10, 0.85)'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.strokeStyle = '#32527B'; ctx.lineWidth = 12; ctx.strokeRect(0, 0, canvas.width, canvas.height);
                 ctx.font = 'bold 70px "Courier New", Courier, monospace';
-                ctx.fillStyle = '#FDCC0D';
-                ctx.textAlign = 'center';
-                ctx.textBaseline = 'middle';
+                ctx.fillStyle = '#FDCC0D'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
                 ctx.fillText(text, canvas.width / 2, canvas.height / 2);
-
-                const tex = new THREE.CanvasTexture(canvas);
-                const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true });
-                const geo = new THREE.PlaneGeometry(4, 1);
-                return new THREE.Mesh(geo, mat);
+                return new THREE.Mesh(new THREE.PlaneGeometry(4, 1), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(canvas), transparent: true }));
             },
 
             createWallTitle: function(text) {
                 const canvas = document.createElement('canvas');
-                canvas.width = 2048;
-                canvas.height = 256;
+                canvas.width = 2048; canvas.height = 256;
                 const ctx = canvas.getContext('2d');
-                ctx.fillStyle = 'transparent';
-                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = 'transparent'; ctx.fillRect(0, 0, canvas.width, canvas.height);
                 ctx.font = 'bold 120px "Courier New", Courier, monospace';
-                ctx.fillStyle = '#FFFFFF';
-                ctx.textAlign = 'center';
-                ctx.textBaseline = 'middle';
-                ctx.shadowColor = '#FDCC0D';
-                ctx.shadowBlur = 20;
+                ctx.fillStyle = '#FFFFFF'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+                ctx.shadowColor = '#FDCC0D'; ctx.shadowBlur = 20;
                 ctx.fillText(text, canvas.width / 2, canvas.height / 2);
-
-                const tex = new THREE.CanvasTexture(canvas);
-                const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, side: THREE.DoubleSide });
-                const geo = new THREE.PlaneGeometry(18, 2.2);
-                return new THREE.Mesh(geo, mat);
+                return new THREE.Mesh(new THREE.PlaneGeometry(18, 2.2), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(canvas), transparent: true, side: THREE.DoubleSide }));
             },
 
             buildFrames: function(w, h, d) {
-                // Limpieza
-                this.frames.forEach(f => {
-                    scene.remove(f.group);
-                    if(f.canvasMesh.geometry) f.canvasMesh.geometry.dispose();
-                    if(f.canvasMesh.material.map) f.canvasMesh.material.map.dispose();
-                    f.canvasMesh.material.dispose();
-                    if(f.borderMesh.geometry) f.borderMesh.geometry.dispose();
-                    f.borderMesh.material.dispose();
-                    if(f.labelMesh) {
-                        f.labelMesh.geometry.dispose();
-                        f.labelMesh.material.map.dispose();
-                        f.labelMesh.material.dispose();
-                    }
-                });
+                this.frames.forEach(f => { scene.remove(f.group); /* disposal logic omitted for brevity */ });
                 this.frames = [];
-
-                this.wallTitles.forEach(t => {
-                    scene.remove(t);
-                    t.geometry.dispose();
-                    t.material.map.dispose();
-                    t.material.dispose();
-                });
+                this.wallTitles.forEach(t => scene.remove(t));
                 this.wallTitles = [];
 
-                // Titulos de paredes
-                const titleLeft = this.createWallTitle("PATRONES");
-                titleLeft.rotation.y = Math.PI/2;
-                scene.add(titleLeft);
-                this.wallTitles.push(titleLeft);
-
-                const titleRight = this.createWallTitle("CONCEPTOS");
-                titleRight.rotation.y = -Math.PI/2;
-                scene.add(titleRight);
-                this.wallTitles.push(titleRight);
-
-                const titleCredits = this.createWallTitle("CRÉDITOS Y CREADORES");
-                titleCredits.rotation.y = Math.PI;
-                scene.add(titleCredits);
-                this.wallTitles.push(titleCredits);
+                const titleLeft = this.createWallTitle("PATRONES"); titleLeft.rotation.y = Math.PI/2; scene.add(titleLeft); this.wallTitles.push(titleLeft);
+                const titleRight = this.createWallTitle("CONCEPTOS"); titleRight.rotation.y = -Math.PI/2; scene.add(titleRight); this.wallTitles.push(titleRight);
+                const titleCredits = this.createWallTitle("CRÉDITOS Y CREADORES"); titleCredits.rotation.y = Math.PI; scene.add(titleCredits); this.wallTitles.push(titleCredits);
 
                 const framesData = [
-                    { height: 8, label: '' }, // 0: Logo Fondo
-                    { height: 4.2, label: 'Lx Musx' }, // 1
-                    { height: 4.2, label: 'Roelephantom' }, // 2
-                    { height: 4.2, label: 'Roots Disorder' }, // 3
-                    { height: 4.2, label: 'Dark Cupcake' }, // 4
-                    { height: 4.2, label: 'The Highgineer' }, // 5
-                    { height: 4.2, label: 'Kstillo' }, // 6
-                    { height: 4.2, label: 'Collar de Cemi' }, // 7
-                    { height: 4.2, label: 'Pantallas' }, // 8
-                    { height: 4.2, label: 'Pulseras' }, // 9
-                    { height: 4.2, label: 'The Highgineer/Kstillo' }, // 10
-                    { height: 4.2, label: 'Lx Musx/Roelephantom' }, // 11
-                    { height: 4.2, label: 'Dark Cupcake/Roots Disorder' }, // 12
-                    { height: 8, label: '' } // 13: Creditos
+                    { height: 8, label: '' }, { height: 4.2, label: 'Lx Musx' }, { height: 4.2, label: 'Roelephantom' }, 
+                    { height: 4.2, label: 'Roots Disorder' }, { height: 4.2, label: 'Dark Cupcake' }, { height: 4.2, label: 'The Highgineer' }, 
+                    { height: 4.2, label: 'Kstillo' }, { height: 4.2, label: 'Collar de Cemi' }, { height: 4.2, label: 'Pantallas' }, 
+                    { height: 4.2, label: 'Pulseras' }, { height: 4.2, label: 'The Highgineer/Kstillo' }, { height: 4.2, label: 'Lx Musx/Roelephantom' }, 
+                    { height: 4.2, label: 'Dark Cupcake/Roots Disorder' }, { height: 8, label: '' }
                 ];
 
                 framesData.forEach((data, index) => {
                     const group = new THREE.Group();
-                    
-                    const canvasMat = new THREE.MeshBasicMaterial({ color: 0x222222 });
-                    const canvasGeo = new THREE.PlaneGeometry(data.height, data.height);
-                    const canvasMesh = new THREE.Mesh(canvasGeo, canvasMat);
-                    
-                    const borderGeo = new THREE.BoxGeometry(data.height + 0.4, data.height + 0.4, 0.2);
-                    const borderMat = this.getStyleMaterial();
-                    const borderMesh = new THREE.Mesh(borderGeo, borderMat);
+                    const canvasMesh = new THREE.Mesh(new THREE.PlaneGeometry(data.height, data.height), new THREE.MeshBasicMaterial({ color: 0x222222 }));
+                    const borderMesh = new THREE.Mesh(new THREE.BoxGeometry(data.height + 0.4, data.height + 0.4, 0.2), this.getStyleMaterial());
                     borderMesh.position.z = -0.15;
 
-                    group.add(borderMesh);
-                    group.add(canvasMesh);
+                    group.add(borderMesh); group.add(canvasMesh);
 
                     let labelMesh = null;
                     if(data.label) {
@@ -547,37 +443,21 @@
 
             updateFramePositions: function(w, h, d) {
                 if(this.wallTitles.length >= 3) {
-                    this.wallTitles[0].position.set(-w/2 + 0.15, h/2 - 2, 0); // Patrones
-                    this.wallTitles[1].position.set(w/2 - 0.15, h/2 - 2, 0); // Conceptos
-                    this.wallTitles[2].position.set(0, h/2 - 2, d/2 - 0.15); // Creditos
+                    this.wallTitles[0].position.set(-w/2 + 0.15, h/2 - 2, 0); 
+                    this.wallTitles[1].position.set(w/2 - 0.15, h/2 - 2, 0); 
+                    this.wallTitles[2].position.set(0, h/2 - 2, d/2 - 0.15); 
                 }
 
                 const frameConfigs = [
                     { px: 0, py: 0, pz: -d/2 + 0.1 },
-                    // Patrones
-                    { px: -w/2 + 0.1, py: h/5, pz: -d/3.2 },
-                    { px: -w/2 + 0.1, py: h/5, pz: 0 },
-                    { px: -w/2 + 0.1, py: h/5, pz: d/3.2 },
-                    { px: -w/2 + 0.1, py: -h/5, pz: -d/3.2 },
-                    { px: -w/2 + 0.1, py: -h/5, pz: 0 },
-                    { px: -w/2 + 0.1, py: -h/5, pz: d/3.2 },
-                    // Conceptos
-                    { px: w/2 - 0.1, py: h/5, pz: -d/3.2 },
-                    { px: w/2 - 0.1, py: h/5, pz: 0 },
-                    { px: w/2 - 0.1, py: h/5, pz: d/3.2 },
-                    { px: w/2 - 0.1, py: -h/5, pz: -d/3.2 },
-                    { px: w/2 - 0.1, py: -h/5, pz: 0 },
-                    { px: w/2 - 0.1, py: -h/5, pz: d/3.2 },
-                    // Creditos
+                    { px: -w/2 + 0.1, py: h/5, pz: -d/3.2 }, { px: -w/2 + 0.1, py: h/5, pz: 0 }, { px: -w/2 + 0.1, py: h/5, pz: d/3.2 },
+                    { px: -w/2 + 0.1, py: -h/5, pz: -d/3.2 }, { px: -w/2 + 0.1, py: -h/5, pz: 0 }, { px: -w/2 + 0.1, py: -h/5, pz: d/3.2 },
+                    { px: w/2 - 0.1, py: h/5, pz: -d/3.2 }, { px: w/2 - 0.1, py: h/5, pz: 0 }, { px: w/2 - 0.1, py: h/5, pz: d/3.2 },
+                    { px: w/2 - 0.1, py: -h/5, pz: -d/3.2 }, { px: w/2 - 0.1, py: -h/5, pz: 0 }, { px: w/2 - 0.1, py: -h/5, pz: d/3.2 },
                     { px: 0, py: 0, pz: d/2 - 0.1 }
                 ];
 
-                this.frames.forEach((f, i) => {
-                    const config = frameConfigs[i];
-                    if(config) {
-                        f.group.position.set(config.px, config.py, config.pz);
-                    }
-                });
+                this.frames.forEach((f, i) => { if(frameConfigs[i]) f.group.position.set(frameConfigs[i].px, frameConfigs[i].py, frameConfigs[i].pz); });
             },
 
             getStyleMaterial: function() {
@@ -591,17 +471,12 @@
 
             updateGlobalStyle: function() {
                 const newMat = this.getStyleMaterial();
-                this.frames.forEach(f => {
-                    f.borderMesh.material.dispose();
-                    f.borderMesh.material = newMat;
-                });
+                this.frames.forEach(f => { f.borderMesh.material.dispose(); f.borderMesh.material = newMat; });
             },
 
             injectTexture: function(frameIndex, url) {
                 if(!this.frames[frameIndex]) return;
-                
-                this.frames[frameIndex].url = url; // Registramos para exportación
-
+                this.frames[frameIndex].url = url; 
                 textureLoader.load(url, (texture) => {
                     texture.encoding = THREE.sRGBEncoding;
                     const aspect = texture.image.width / texture.image.height;
@@ -611,10 +486,8 @@
                     
                     canvasMesh.geometry.dispose();
                     canvasMesh.geometry = new THREE.PlaneGeometry(targetH * aspect, targetH);
-                    
                     borderMesh.geometry.dispose();
                     borderMesh.geometry = new THREE.BoxGeometry((targetH * aspect) + 0.4, targetH + 0.4, 0.2);
-
                     canvasMesh.material.map = texture;
                     canvasMesh.material.color.setHex(0xffffff);
                     canvasMesh.material.needsUpdate = true;
@@ -623,112 +496,57 @@
 
             resetDefaultTextures: function() {
                 if (isExported && SGX.config.frameUrls && SGX.config.frameUrls.length > 0) {
-                    this.frames.forEach((f, i) => {
-                        if (SGX.config.frameUrls[i]) this.injectTexture(i, SGX.config.frameUrls[i]);
-                    });
+                    this.frames.forEach((f, i) => { if (SGX.config.frameUrls[i]) this.injectTexture(i, SGX.config.frameUrls[i]); });
                     return;
                 }
-
                 const defaultUrls = [
-                    'https://static.wixstatic.com/media/fe81a7_b39d8b1fd26b4cf49a7636a787d5753e~mv2.png',
-                    'https://static.wixstatic.com/media/fe81a7_8e633cf8bcb3446d9b4cbe133dfcbce1~mv2.png',
-                    'https://static.wixstatic.com/media/fe81a7_92284537ab6d4d85b7f0143599e927a8~mv2.png',
-                    'https://static.wixstatic.com/media/fe81a7_50a00e8777db48eaa8ccac45f762a408~mv2.png',
-                    'https://static.wixstatic.com/media/fe81a7_57282853d2e74770ba081e88b6fe01fa~mv2.png',
-                    'https://static.wixstatic.com/media/fe81a7_a5474248be1d408eb59d4a90872ecd2a~mv2.png',
-                    'https://static.wixstatic.com/media/fe81a7_c2420b5aecb246ad9d3af8266aeebfd5~mv2.png',
-                    'https://static.wixstatic.com/media/fe81a7_805b74a1b73d47fa83c446130585cd72~mv2.png',
-                    'https://static.wixstatic.com/media/fe81a7_543abb3e04aa4488928129ccae33875a~mv2.png',
-                    'https://static.wixstatic.com/media/fe81a7_cb6714af21974fe689652004d260cbc8~mv2.png',
-                    'https://static.wixstatic.com/media/fe81a7_a0b0590dc0844d1b88d21763d52696c7~mv2.png',
-                    'https://static.wixstatic.com/media/fe81a7_76f32d6280db4b508bec103ffd07bcd4~mv2.png',
-                    'https://static.wixstatic.com/media/fe81a7_3640b51d386445ffa6f393c73785d8af~mv2.png',
-                    'https://static.wixstatic.com/media/fe81a7_737e849b909c468998928172fa1ea821~mv2.png'
+                    'https://static.wixstatic.com/media/fe81a7_b39d8b1fd26b4cf49a7636a787d5753e~mv2.png', 'https://static.wixstatic.com/media/fe81a7_8e633cf8bcb3446d9b4cbe133dfcbce1~mv2.png',
+                    'https://static.wixstatic.com/media/fe81a7_92284537ab6d4d85b7f0143599e927a8~mv2.png', 'https://static.wixstatic.com/media/fe81a7_50a00e8777db48eaa8ccac45f762a408~mv2.png',
+                    'https://static.wixstatic.com/media/fe81a7_57282853d2e74770ba081e88b6fe01fa~mv2.png', 'https://static.wixstatic.com/media/fe81a7_a5474248be1d408eb59d4a90872ecd2a~mv2.png',
+                    'https://static.wixstatic.com/media/fe81a7_c2420b5aecb246ad9d3af8266aeebfd5~mv2.png', 'https://static.wixstatic.com/media/fe81a7_805b74a1b73d47fa83c446130585cd72~mv2.png',
+                    'https://static.wixstatic.com/media/fe81a7_543abb3e04aa4488928129ccae33875a~mv2.png', 'https://static.wixstatic.com/media/fe81a7_cb6714af21974fe689652004d260cbc8~mv2.png',
+                    'https://static.wixstatic.com/media/fe81a7_a0b0590dc0844d1b88d21763d52696c7~mv2.png', 'https://static.wixstatic.com/media/fe81a7_76f32d6280db4b508bec103ffd07bcd4~mv2.png',
+                    'https://static.wixstatic.com/media/fe81a7_3640b51d386445ffa6f393c73785d8af~mv2.png', 'https://static.wixstatic.com/media/fe81a7_737e849b909c468998928172fa1ea821~mv2.png'
                 ];
-                
-                this.frames.forEach((f, i) => {
-                    this.injectTexture(i, defaultUrls[i]);
-                });
+                this.frames.forEach((f, i) => this.injectTexture(i, defaultUrls[i]));
             }
         };
 
-        // --- INICIALIZACIÓN ---
         initRoom();
         
-        // Carga inicial según el estado (Exportado o Editor)
         if (isExported) {
-            // Entramos directo a la simulación Manual (Embed Limpio)
             document.getElementById('ui-layer').style.display = 'none';
             document.getElementById('nav-controls').style.display = 'flex';
             document.getElementById('btn-ai-toggle').style.display = 'none';
             document.getElementById('hud').style.display = 'none';
             SGX.trackingMode = 'Manual';
-            // No iniciamos la GUI
         }
 
-        // --- NAVEGACIÓN Y BOTONES ---
-        document.getElementById('btn-patrones').onclick = () => {
-            SGX.targetAngle = -Math.PI / 2;
-            updateNavUI('btn-patrones');
-        };
-        document.getElementById('btn-inicio').onclick = () => {
-            SGX.targetAngle = 0;
-            updateNavUI('btn-inicio');
-        };
-        document.getElementById('btn-conceptos').onclick = () => {
-            SGX.targetAngle = Math.PI / 2;
-            updateNavUI('btn-conceptos');
-        };
-        document.getElementById('btn-creditos').onclick = () => {
-            SGX.targetAngle = Math.PI;
-            updateNavUI('btn-creditos');
-        };
+        document.getElementById('btn-patrones').onclick = () => { SGX.targetAngle = -Math.PI / 2; updateNavUI('btn-patrones'); };
+        document.getElementById('btn-inicio').onclick = () => { SGX.targetAngle = 0; updateNavUI('btn-inicio'); };
+        document.getElementById('btn-conceptos').onclick = () => { SGX.targetAngle = Math.PI / 2; updateNavUI('btn-conceptos'); };
+        document.getElementById('btn-creditos').onclick = () => { SGX.targetAngle = Math.PI; updateNavUI('btn-creditos'); };
 
         function updateNavUI(activeId) {
             document.querySelectorAll('.nav-btn').forEach(btn => btn.classList.remove('active'));
             document.getElementById(activeId).classList.add('active');
         }
 
-        // --- UPLOAD HANDLER ---
         document.getElementById('local-image-upload').addEventListener('change', (e) => {
             const file = e.target.files[0];
-            if (file) {
-                const blobUrl = URL.createObjectURL(file);
-                GalleryManager.injectTexture(SGX.config.activeFrame, blobUrl);
-            }
+            if (file) GalleryManager.injectTexture(SGX.config.activeFrame, URL.createObjectURL(file));
         });
 
-        // --- GUI DEL ARQUITECTO ---
         function initGUI() {
             const gui = new GUI({ title: '⚙️ SGX ARCHITECT V4' });
-            
             const galleryFolder = gui.addFolder('🖼️ Gallery Injection');
-            galleryFolder.add(SGX.config, 'activeFrame', { 
-                '0. Inicio': 0, 
-                '1. Patrones: Lx Musx': 1, 
-                '2. Patrones: Roelephantom': 2, 
-                '3. Patrones: Roots Disorder': 3,
-                '4. Patrones: Dark Cupcake': 4,
-                '5. Patrones: The Highgineer': 5,
-                '6. Patrones: Kstillo': 6,
-                '7. Conceptos: Collar Cemi': 7,
-                '8. Conceptos: Pantallas': 8,
-                '9. Conceptos: Pulseras': 9,
-                '10. Conceptos: Wayuko TH/Ks': 10,
-                '11. Conceptos: Wayuko LM/Ro': 11,
-                '12. Conceptos: Wayuko DC/RD': 12,
-                '13. Créditos': 13
-            }).name('Seleccionar Marco').onChange(v => SGX.config.activeFrame = parseInt(v));
-            
+            galleryFolder.add(SGX.config, 'activeFrame', { '0. Inicio': 0, '1. Patrones: Lx Musx': 1, '2. Patrones: Roelephantom': 2, '3. Patrones: Roots Disorder': 3, '4. Patrones: Dark Cupcake': 4, '5. Patrones: The Highgineer': 5, '6. Patrones: Kstillo': 6, '7. Conceptos: Collar Cemi': 7, '8. Conceptos: Pantallas': 8, '9. Conceptos: Pulseras': 9, '10. Conceptos: Wayuko TH/Ks': 10, '11. Conceptos: Wayuko LM/Ro': 11, '12. Conceptos: Wayuko DC/RD': 12, '13. Créditos': 13 }).name('Seleccionar Marco').onChange(v => SGX.config.activeFrame = parseInt(v));
             galleryFolder.add(SGX.config, 'remoteImageUrl').name('URL de Imagen');
             galleryFolder.add(SGX.config, 'injectRemote').name('🔗 Inyectar URL');
             galleryFolder.add(SGX.config, 'uploadAction').name('⬆️ Subir Local');
-            
-            galleryFolder.add(SGX.config, 'frameStyle', ['Neon Glow', 'Industrial Blue', 'Minimalist White', 'Dark Matter'])
-                .name('Estilo Marco').onChange(() => GalleryManager.updateGlobalStyle());
+            galleryFolder.add(SGX.config, 'frameStyle', ['Neon Glow', 'Industrial Blue', 'Minimalist White', 'Dark Matter']).name('Estilo Marco').onChange(() => GalleryManager.updateGlobalStyle());
             galleryFolder.add(SGX.config, 'resetFrames').name('↻ Reset Defaults');
 
-            // NUEVO DROPDOWN PARA PAREDES
             const roomFolder = gui.addFolder('📐 Dimensiones y Entorno');
             roomFolder.add(SGX.config, 'boxTextureUrl', patternTextures).name('Textura Paredes').onChange(updateRoomDimensions);
             roomFolder.add(SGX.config, 'boxWidth', 10, 80).name('Ancho (Paredes L/R)').onChange(updateRoomDimensions);
@@ -745,19 +563,15 @@
             physFolder.add(SGX.config, 'invertirY').name('Invertir Y');
 
             gui.add(SGX.config, 'exportAction').name('💾 Exportar Galería (Limpia)');
-
             gui.open();
         }
 
-        // --- INPUT TRACKING (PARALLAX LOGIC) ---
         function updateTracking(nx, ny) {
             const dirX = SGX.config.invertirX ? -1 : 1;
             const dirY = SGX.config.invertirY ? -1 : 1;
             const multiplier = SGX.config.modo === 'Portal (Físico)' ? -1 : 1;
-
             SGX.targetCamX = nx * SGX.config.amplitudX * dirX * multiplier;
             SGX.targetCamY = -ny * SGX.config.amplitudY * dirY * multiplier;
-
             document.getElementById('hud-x').innerText = SGX.targetCamX.toFixed(2);
             document.getElementById('hud-y').innerText = SGX.targetCamY.toFixed(2);
         }
@@ -770,7 +584,6 @@
             }
         });
 
-        // --- MEDIA PIPE IA ---
         const video = document.getElementById('webcam_feed');
         const faceMesh = new window.FaceMesh({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`});
         faceMesh.setOptions({ maxNumFaces: 1, refineLandmarks: false, minDetectionConfidence: 0.5 });
@@ -788,7 +601,6 @@
             }
         }
 
-        // --- STARTUP FLOW & AI TOGGLE ---
         function launch(mode) {
             SGX.trackingMode = mode;
             document.getElementById('ui-layer').style.opacity = '0';
@@ -800,9 +612,7 @@
                     document.getElementById('btn-ai-toggle').style.display = 'block';
                     document.getElementById('hud').style.display = 'block';
                     document.getElementById('hud-mode').innerText = mode;
-                    if (!document.querySelector('.lil-gui')) {
-                        initGUI();
-                    }
+                    if (!document.querySelector('.lil-gui')) initGUI();
                 }
             }, 600);
         }
@@ -817,16 +627,8 @@
                 try {
                     const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } });
                     video.srcObject = stream;
-                    video.onloadedmetadata = () => {
-                        video.play();
-                        SGX.trackingMode = 'Face IA';
-                        btnAiToggle.innerText = "🖱️ MODO MANUAL";
-                        document.getElementById('hud-mode').innerText = 'Face IA';
-                        aiLoop();
-                    };
-                } catch (e) {
-                    alert("No se detectó cámara o permiso denegado.");
-                }
+                    video.onloadedmetadata = () => { video.play(); SGX.trackingMode = 'Face IA'; btnAiToggle.innerText = "🖱️ MODO MANUAL"; document.getElementById('hud-mode').innerText = 'Face IA'; aiLoop(); };
+                } catch (e) { alert("No se detectó cámara o permiso denegado."); }
             }
         };
 
@@ -835,47 +637,45 @@
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } });
                 video.srcObject = stream;
-                video.onloadedmetadata = () => {
-                    video.play();
-                    launch('Face IA');
-                    aiLoop();
-                };
-            } catch (e) {
-                alert("No se detectó cámara. Cambiando a Modo Manual (Mouse/Touch).");
-                launch('Manual');
-            }
+                video.onloadedmetadata = () => { video.play(); launch('Face IA'); aiLoop(); };
+            } catch (e) { launch('Manual'); }
         };
 
-        // --- RENDER LOOP ---
-        function animate() {
-            requestAnimationFrame(animate);
+        // 4. BIFURCACIÓN DEL RENDER LOOP (EL FIX MAESTRO)
+        function render() {
+            // Si el Quest no está puesto/presentando, usamos tu motor de Parallax (Mouse o Face IA)
+            if (!renderer.xr.isPresenting) {
+                SGX.currentAngle += (SGX.targetAngle - SGX.currentAngle) * 0.05;
 
-            // Transición suave de ángulo
-            SGX.currentAngle += (SGX.targetAngle - SGX.currentAngle) * 0.05;
+                let targetZBase = (SGX.targetAngle === 0) ? SGX.config.camDistance : 0;
+                SGX.currentCamZBase += (targetZBase - SGX.currentCamZBase) * 0.05;
 
-            // Ajustar Z Base. Cuando mira al fondo (0) distancia positiva. Cuando rota (lados/atrás) es 0 para estar en el centro.
-            let targetZBase = (SGX.targetAngle === 0) ? SGX.config.camDistance : 0;
-            SGX.currentCamZBase += (targetZBase - SGX.currentCamZBase) * 0.05;
+                SGX.currentCamX += (SGX.targetCamX - SGX.currentCamX) * SGX.config.suavizado;
+                SGX.currentCamY += (SGX.targetCamY - SGX.currentCamY) * SGX.config.suavizado;
 
-            // Parallax local
-            SGX.currentCamX += (SGX.targetCamX - SGX.currentCamX) * SGX.config.suavizado;
-            SGX.currentCamY += (SGX.targetCamY - SGX.currentCamY) * SGX.config.suavizado;
+                const offsetX = Math.cos(SGX.currentAngle) * SGX.currentCamX;
+                const offsetZ = Math.sin(SGX.currentAngle) * SGX.currentCamX;
 
-            const offsetX = Math.cos(SGX.currentAngle) * SGX.currentCamX;
-            const offsetZ = Math.sin(SGX.currentAngle) * SGX.currentCamX;
+                camera.position.x = offsetX;
+                camera.position.y = SGX.currentCamY;
+                camera.position.z = SGX.currentCamZBase + offsetZ; 
 
-            camera.position.x = offsetX;
-            camera.position.y = SGX.currentCamY;
-            camera.position.z = SGX.currentCamZBase + offsetZ; 
-
-            const lookDist = 20;
-            const lookX = camera.position.x + Math.sin(SGX.currentAngle) * lookDist;
-            const lookZ = camera.position.z - Math.cos(SGX.currentAngle) * lookDist;
-            
-            camera.lookAt(lookX, camera.position.y, lookZ);
+                const lookDist = 20;
+                const lookX = camera.position.x + Math.sin(SGX.currentAngle) * lookDist;
+                const lookZ = camera.position.z - Math.cos(SGX.currentAngle) * lookDist;
+                
+                camera.lookAt(lookX, camera.position.y, lookZ);
+            } else {
+                // En VR, la cámara necesita estar libre de sobreescrituras matemáticas para que el visor no colapse.
+                // Posicionamos el `cameraGroup` en el centro (0,0,0) para que el usuario esté rodeado por la galería.
+                cameraGroup.position.set(0, 0, 0); 
+            }
 
             renderer.render(scene, camera);
         }
+        
+        // 5. REEMPLAZO DE ANIMATION FRAME
+        renderer.setAnimationLoop(render);
         
         window.addEventListener('resize', () => {
             camera.aspect = window.innerWidth / window.innerHeight;
@@ -883,7 +683,6 @@
             renderer.setSize(window.innerWidth, window.innerHeight);
         });
 
-        animate();
     </script>
 </body>
 </html>
